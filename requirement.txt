@@ -1,0 +1,48 @@
+# === Environment & Dev Tools ===
+ipython
+jupyter
+python-dotenv
+black
+flake8
+mypy
+coverage
+
+# === Testing ===
+pytest
+
+# === Web Frameworks ===
+flask
+django
+fastapi
+uvicorn
+streamlit
+
+# === Database ===
+sqlalchemy
+pymysql
+psycopg2-binary
+tinydb
+
+# === Data Science & Analisis Data ===
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn
+scipy
+statsmodels
+
+# === Machine Learning ===
+tensorflow
+torch
+xgboost
+lightgbm
+
+# === API & HTTP ===
+requests
+httpx
+aiohttp
+
+# === Security ===
+cryptography
+pyjwt
