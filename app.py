@@ -22,7 +22,7 @@ def vigenere_decrypt_bytes(data: bytes, key: bytes) -> bytes:
     key_len = len(key)
     return bytes((b - key[i % key_len]) % 256 for i, b in enumerate(data))
 
-# ===== AES Layer =====
+# ===== AES Layer (CBC) =====
 
 def derive_aes_key(key_str: str) -> bytes:
     return hashlib.sha256(key_str.encode()).digest()
@@ -41,6 +41,22 @@ def aes_decrypt_bytes(data: bytes, key_str: str) -> bytes:
     cipher = AES.new(key, AES.MODE_CBC, iv)
     return unpad(cipher.decrypt(encrypted_data), AES.block_size)
 
+# ===== AES Layer (CFB) =====
+
+def aes_cfb_encrypt_bytes(data: bytes, key_str: str) -> bytes:
+    key = derive_aes_key(key_str)
+    iv = get_random_bytes(16)
+    cipher = AES.new(key, AES.MODE_CFB, iv)
+    encrypted = cipher.encrypt(data)
+    return iv + encrypted
+
+def aes_cfb_decrypt_bytes(data: bytes, key_str: str) -> bytes:
+    key = derive_aes_key(key_str)
+    iv = data[:16]
+    encrypted_data = data[16:]
+    cipher = AES.new(key, AES.MODE_CFB, iv)
+    return cipher.decrypt(encrypted_data)
+
 # ===== Combined Encryption/Decryption =====
 
 def get_caesar_shift_from_key(key: str) -> int:
@@ -50,15 +66,16 @@ def encrypt_data(data: bytes, key: str) -> bytes:
     shift = get_caesar_shift_from_key(key)
     caesar = caesar_encrypt_bytes(data, shift)
     vigenere = vigenere_encrypt_bytes(caesar, key.encode())
-    aes = aes_encrypt_bytes(vigenere, key)
-    return aes
+    aes_cbc = aes_encrypt_bytes(vigenere, key)
+    aes_cfb = aes_cfb_encrypt_bytes(aes_cbc, key)
+    return aes_cfb
 
 def decrypt_data(data: bytes, key: str) -> bytes:
     shift = get_caesar_shift_from_key(key)
-    aes = aes_decrypt_bytes(data, key)
-    vigenere = vigenere_decrypt_bytes(aes, key.encode())
-    caesar = caesar_decrypt_bytes(vigenere, shift)
-    return caesar
+    aes_cbc = aes_cfb_decrypt_bytes(data, key)
+    vigenere = aes_decrypt_bytes(aes_cbc, key)
+    caesar = vigenere_decrypt_bytes(vigenere, key.encode())
+    return caesar_decrypt_bytes(caesar, shift)
 
 # ===== Encrypt Filename =====
 
@@ -77,7 +94,7 @@ def decrypt_filename(encrypted_hex: str, key: str) -> str:
 # ===== Streamlit App =====
 
 st.set_page_config(page_title="Byte File Encryptor", layout="centered")
-st.title("🔐 Byte File Encryptor & Decryptor (Caesar + Vigenère + AES)")
+st.title("🔐 Byte File Encryptor & Decryptor (Caesar + Vigenère + AES-CBC + AES-CFB)")
 st.markdown("🔒 Enkripsi file dengan nama acak dan kembalikan nama asli saat dekripsi!")
 
 mode = st.radio("Mode", ["Enkripsi", "Dekripsi"])
@@ -98,7 +115,7 @@ if uploaded_file and key:
                 else:
                     original_fullname = filename
 
-                # Tambahkan metadata
+                # Tambahkan metadata nama
                 name_bytes = original_fullname.encode()
                 name_len = len(name_bytes)
                 metadata = bytes([name_len]) + name_bytes
@@ -114,13 +131,16 @@ if uploaded_file and key:
                 st.success("✅ File berhasil dienkripsi!")
 
             else:
+                # Ambil nama asli dari metadata
                 name_len = file_data[0]
                 name_bytes = file_data[1:1+name_len]
                 original_filename = name_bytes.decode(errors="ignore")
 
+                # Dekripsi isi
                 encrypted_data = file_data[1+name_len:]
                 result = decrypt_data(encrypted_data, key)
 
+                # Format nama file hasil dekripsi
                 if "." in original_filename:
                     name, ext = original_filename.rsplit(".", 1)
                     output_filename = f"{name}_decrypted.{ext}"
@@ -129,9 +149,11 @@ if uploaded_file and key:
 
                 st.success(f"✅ File berhasil didekripsi sebagai `{output_filename}`")
 
+                # Jika file audio, tampilkan preview
                 if output_filename.endswith(("mp3", "wav", "ogg")):
                     st.audio(result, format=f"audio/{ext}")
 
+            # Tombol unduh
             st.download_button("⬇️ Unduh File Hasil", result, file_name=output_filename)
 
         except Exception as e:
